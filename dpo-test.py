@@ -7,8 +7,9 @@ from utils import *
 def main():
     ######## MODEL #############
     model_name = "Qwen/Qwen2.5-1.5B-Instruct"
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name, attn_implementation="flash_attention_2")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
+    tokenizer.padding_side = "left"
     
     ############ DATASET ############
     # source: https://colab.research.google.com/github/unslothai/notebooks/blob/main/nb/Zephyr_(7B)-DPO.ipynb#scrollTo=AqkY_wHdKyOl
@@ -56,7 +57,9 @@ def main():
         model_adapter_name="DPO",
         ref_adapter_name="reference",
         max_length = 256,
-        max_prompt_length = 128)
+        max_prompt_length = 128,
+        #padding_free=True
+        )
     
     dpo_trainer = DPOTrainer(
         model = model,

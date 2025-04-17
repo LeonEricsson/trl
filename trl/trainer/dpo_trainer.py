@@ -893,7 +893,7 @@ class DPOTrainer(Trainer):
 
         if "pixel_attention_mask" in batch:
             output["pixel_attention_mask"] = torch.cat(
-                [batch["pixel_attention_mask"], batch["pixel_attention_mask"]], dim=0
+                [batch["pixel_attention_mask"], batch["pixdel_attention_mask"]], dim=0
             )
         if "image_sizes" in batch:
             output["image_sizes"] = torch.cat([batch["image_sizes"], batch["image_sizes"]], dim=0)
@@ -1111,7 +1111,10 @@ class DPOTrainer(Trainer):
 
         concatenated_batch = self.concatenated_inputs(batch, padding_value=self.padding_value)
 
-        model_kwargs = {}
+        model_kwargs = {
+            'use_cache': False
+        }
+        
         if self.aux_loss_enabled:
             model_kwargs["output_router_logits"] = True
 
@@ -1127,6 +1130,7 @@ class DPOTrainer(Trainer):
         prompt_attention_mask = concatenated_batch["prompt_attention_mask"]
         completion_input_ids = concatenated_batch["completion_input_ids"]
         completion_attention_mask = concatenated_batch["completion_attention_mask"]
+        
         if self.is_encoder_decoder:
             labels = completion_input_ids
             labels[completion_attention_mask == 0] = self.label_pad_token_id
