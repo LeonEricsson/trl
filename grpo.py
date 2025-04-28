@@ -1,7 +1,7 @@
 from datasets import load_dataset
 from transformers import AutoTokenizer
 
-from trl import GRPOConfig, GRPOTrainer
+from trl import GRPOConfig, GRPOTrainer, TrlParser
 
 
 def main():
@@ -11,10 +11,11 @@ def main():
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-    # dataset = load_dataset("trl-lib/tldr", split="train[:2048]")
-    # eval_dataset = load_dataset("trl-lib/tldr", split="validation[:256]")
-    dataset = load_dataset("trl-lib/ultrafeedback-prompt", split="train[:2048]")
-    eval_dataset = load_dataset("trl-lib/ultrafeedback-prompt", split="test[:256]")
+    dataset = load_dataset("trl-lib/tldr", split="train[:2048]")
+    eval_dataset = load_dataset("trl-lib/tldr", split="validation[:256]")
+
+    parser = TrlParser(GRPOConfig)
+    (training_args,) = parser.parse_args_into_dataclasses()
 
     # Dummy reward function: count the number of unique characters in the completions
     def reward_num_unique_chars(completions, **kwargs):
@@ -26,7 +27,8 @@ def main():
         bf16=True,
         # use_liger_kernel=True,
         max_completion_length=128,
-        gradient_checkpointing=True,
+        gradient_checkpointing=False,
+        # use_cache=False,
         use_vllm=False,
         num_iterations=1,
         per_device_train_batch_size=8,
@@ -36,6 +38,7 @@ def main():
         optim="paged_adamw_8bit",
         eval_steps=10,
         max_steps=10,
+        report_to="none",
     )
 
     trainer = GRPOTrainer(
@@ -46,6 +49,8 @@ def main():
         processing_class=tokenizer,
         args=config,
     )
+
+    # print(trainer.accelerator.state.device, trainer.model.device, trainer.ref_model.device)
 
     trainer.train()
 

@@ -27,15 +27,18 @@ from trl import SFTConfig, SFTTrainer
 def main():
     # Load dataset
     train_dataset = load_dataset("open-r1/codeforces-cots", split="train")
-    train_dataset = train_dataset.remove_columns("prompt")
+    train_dataset = train_dataset.remove_columns("messages")
 
     # Load model
     model_id = "Qwen/Qwen2.5-1.5B-Instruct"
-    model_id = "unsloth/Llama-3.2-1B-Instruct"
+    model_id = "Qwen/Qwen2.5-0.5B-Instruct"
+    # model_id = "unsloth/Llama-3.2-1B-Instruct"
     model = AutoModelForCausalLM.from_pretrained(model_id, attn_implementation="flash_attention_2")
     tokenizer = AutoTokenizer.from_pretrained(model_id)
 
     # print(tokenizer.padding_side)
+    def formatting_function(examples):
+        return f"{examples['prompt']} \n {examples['generation']}"
 
     # Train model
     training_args = SFTConfig(
@@ -55,6 +58,7 @@ def main():
         optim="paged_adamw_8bit",
         eval_steps=10,
         max_steps=10,
+        report_to="none",
     )
     trainer = SFTTrainer(
         args=training_args,
@@ -62,6 +66,7 @@ def main():
         processing_class=tokenizer,
         train_dataset=train_dataset,
         eval_dataset=train_dataset,
+        formatting_func=formatting_function,
     )
     trainer.train()
 
