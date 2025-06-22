@@ -54,7 +54,8 @@ def rowise_entropy(logits: torch.Tensor, chunk_size: int = 1) -> torch.Tensor:
     outs = []
     for chunk in logits.split(chunk_size, dim=0):
         logp = F.log_softmax(chunk, dim=-1)
-        outs.append(-(logp.exp() * logp).sum(-1))
+        entropy = -(logp.exp() * logp).sum(-1)
+        outs.append(entropy)
     return torch.cat(outs, dim=0)
 
 
