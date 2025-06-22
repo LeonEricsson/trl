@@ -70,6 +70,26 @@ def entropy_from_logits(logits: torch.Tensor, chunk_size: int = 1) -> torch.Tens
     return torch.cat(outs, 0)
 
 
+def orig(logits):
+    """
+    Computes the entropy of a tensor of shape [B, S, V] row-wise to reduce the memory
+    consumed by the softmax operation.
+    Args:
+        logits (`torch.Tensor`):
+            Logits tensor of shape `(..., num_classes)`.
+    Returns:
+        `torch.Tensor`:
+            Entropy of each position in a sequence
+    """
+    per_token_entropies = []
+    for (row_logits,) in zip(logits):  # loop to reduce peak mem consumption
+        row_logps = F.log_softmax(row_logits, dim=-1)
+        row_entropy = -torch.exp(row_logps) * row_logps
+        per_token_entropies.append(row_entropy)
+    per_token_entropies = torch.stack(per_token_entropies)
+    return per_token_entropies.sum(-1)
+
+
 def entropy_from_logits_nochunk(logits: torch.Tensor, chunk_size=None):
     return torch.stack(
         [
@@ -159,10 +179,12 @@ if __name__ == "__main__":
     # ------------------------------------------------------------------
     #  correctness assertion (ref vs. optimised, both un-chunked & chunked)
     # ------------------------------------------------------------------
+    o = orig(logits)
     ref = rowise_entropy(logits)
     fast = entropy_from_logits(logits)  # vectorised
 
-    assert torch.allclose(ref, fast, rtol=1e-03, atol=1e-06), "Vectorised entropy does not match reference!"
+    assert torch.allclose(o, ref, rtol=1e-03, atol=1e-06), "Does not match"
+
     print("✔ Entropy implementations match within tolerance.\n")  # noqa: T201
 
     chunk_sizes = [1]
@@ -181,15 +203,22 @@ if __name__ == "__main__":
     snaps = []
     for cs in chunk_sizes:
         snaps.append(
+            run_benchmark(orig, logits, runs=runs, label=f"orig({cs})", snapshot_dir=pathlib.Path("snapshots"))
+        )
+        snaps.append(
             run_benchmark(
-                rowise_entropy, logits, runs=40, label=f"rowise_entropy({cs})", snapshot_dir=pathlib.Path("snapshots")
+                rowise_entropy,
+                logits,
+                runs=runs,
+                label=f"rowise_entropy({cs})",
+                snapshot_dir=pathlib.Path("snapshots"),
             )
         )
         snaps.append(
             run_benchmark(
                 entropy_from_logits_nocast,
                 logits,
-                runs=40,
+                runs=runs,
                 label=f"entropy_from_logits_nocast({cs})",
                 snapshot_dir=pathlib.Path("snapshots"),
             )
@@ -198,7 +227,7 @@ if __name__ == "__main__":
             run_benchmark(
                 entropy_from_logits_nochunk,
                 logits,
-                runs=40,
+                runs=runs,
                 label=f"entropy_from_logits_nochunk({cs})",
                 snapshot_dir=pathlib.Path("snapshots"),
             )
@@ -207,7 +236,7 @@ if __name__ == "__main__":
             run_benchmark(
                 entropy_from_logits,
                 logits,
-                runs=40,
+                runs=runs,
                 label=f"entropy_from_logits({cs})",
                 snapshot_dir=pathlib.Path("snapshots"),
             )
