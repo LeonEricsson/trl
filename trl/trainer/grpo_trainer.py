@@ -611,6 +611,7 @@ class GRPOTrainer(Trainer):
         self._metrics = {"train": defaultdict(list), "eval": defaultdict(list)}
         self._total_train_tokens = 0
         self.log_completions = args.log_completions
+        self.log_entropy = args.log_entropy
         self.wandb_log_unique_prompts = args.wandb_log_unique_prompts
         self.num_completions_to_print = args.num_completions_to_print
         # maxlen is set to the total number of forward passes per step. This value of `maxlen` ensures we log only the
@@ -1387,7 +1388,7 @@ class GRPOTrainer(Trainer):
         logits_to_keep = completion_ids.size(1)  # we only need to compute the logits for the completion tokens
 
         # Compute the entropy at each position in the completion
-        compute_entropy = self.token_entropy_percentile_threshold > 0.0 or self.entropy_coef != 0
+        compute_entropy = self.token_entropy_percentile_threshold > 0.0 or self.entropy_coef != 0 or self.log_entropy
         logps_and_entropies = self._get_per_token_logps_and_entropies(
             model, input_ids, attention_mask, logits_to_keep, compute_entropy=compute_entropy
         )
@@ -1460,6 +1461,11 @@ class GRPOTrainer(Trainer):
         if self.beta != 0.0:
             mean_kl = (per_token_kl * completion_mask).sum() / completion_mask.sum()
             self._metrics[mode]["kl"].append(self.accelerator.gather(mean_kl).nanmean().item())
+
+        if compute_entropy:
+            per_token_entropy = logps_and_entropies["entropies"]
+            mean_entropy = (per_token_entropy * completion_mask).sum() / completion_mask.sum()
+            self._metrics[mode]["entropy"].append(self.accelerator.gather(mean_entropy).nanmean().item())
 
         # Compute the clipped probability ratios
         is_low_clipped = (coef_1 < 1 - self.epsilon_low) & (advantages.unsqueeze(1) < 0)
