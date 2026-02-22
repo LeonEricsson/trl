@@ -250,15 +250,26 @@ class DPPOTrainer(GRPOTrainer):
             if needs_topk:
                 # vLLM returns up to K+1 entries sorted by rank (most probable first).
                 # The sampled token is always included but may be at any position.
-                # Truncate to K for topk; find the sampled token's logprob for the standard return.
-                topk_logprobs = [[lp[:K] for lp in seq] for seq in logprobs]
-                topk_token_ids = [[tid[:K] for tid in seq] for seq in logprob_token_ids]
+                # Per the paper, A'_t = TopK(μ, K) ∪ {a_t}. We keep exactly K slots: if the
+                # sampled token a_t is not in the top-K, it replaces the K-th ranked entry.
+                topk_logprobs = []
+                topk_token_ids = []
                 sampled_logprobs = []
                 for seq_lps, seq_tids, seq_cids in zip(logprobs, logprob_token_ids, completion_ids, strict=True):
-                    seq_sampled = []
+                    seq_topk_lps, seq_topk_tids, seq_sampled = [], [], []
                     for step_lps, step_tids, sampled_tid in zip(seq_lps, seq_tids, seq_cids, strict=True):
                         idx = step_tids.index(sampled_tid)
                         seq_sampled.append(step_lps[idx])
+                        # Take top-K entries, then ensure sampled token is present
+                        tk_lps = step_lps[:K]
+                        tk_tids = step_tids[:K]
+                        if sampled_tid not in tk_tids:
+                            tk_lps[-1] = step_lps[idx]
+                            tk_tids[-1] = sampled_tid
+                        seq_topk_lps.append(tk_lps)
+                        seq_topk_tids.append(tk_tids)
+                    topk_logprobs.append(seq_topk_lps)
+                    topk_token_ids.append(seq_topk_tids)
                     sampled_logprobs.append(seq_sampled)
             else:
                 sampled_logprobs = [[step_lps[0] for step_lps in seq_lps] for seq_lps in logprobs]
@@ -317,6 +328,24 @@ class DPPOTrainer(GRPOTrainer):
             sampled_logprobs = all_log_probs.gather(-1, completion_ids.unsqueeze(-1)).squeeze(-1)
             if needs_topk:
                 topk_logps, topk_ids = torch.topk(all_log_probs, k=K, dim=-1)
+                # Per the paper, A'_t = TopK(μ, K) ∪ {a_t}. Ensure the sampled token is in the
+                # top-K set; if not, evict the K-th ranked entry and replace with the sampled token.
+                sampled_ids_exp = completion_ids.unsqueeze(-1)  # (B, T, 1)
+                in_topk = (topk_ids == sampled_ids_exp).any(dim=-1)  # (B, T)
+                needs_swap = ~in_topk  # tokens where a_t is not in top-K
+                if needs_swap.any():
+                    sampled_lps = sampled_logprobs.unsqueeze(-1)  # (B, T, 1)
+                    # Replace last (K-th) entry with sampled token
+                    topk_logps = torch.where(
+                        needs_swap.unsqueeze(-1) & (torch.arange(K, device=device) == K - 1),
+                        sampled_lps.expand_as(topk_logps),
+                        topk_logps,
+                    )
+                    topk_ids = torch.where(
+                        needs_swap.unsqueeze(-1) & (torch.arange(K, device=device) == K - 1),
+                        sampled_ids_exp.expand_as(topk_ids),
+                        topk_ids,
+                    )
             else:
                 topk_logps, topk_ids = None, None
 
