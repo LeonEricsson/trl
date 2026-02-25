@@ -747,8 +747,6 @@ class VLLMGeneration:
                 all_completion_ids = [output.token_ids for outputs in all_outputs for output in outputs.outputs]
                 all_logprobs, all_logprob_token_ids = extract_logprobs(all_outputs)
 
-                extra_fields = {}
-
                 if self.tensor_parallel_size > 1:
                     # Slice completions for this rank within its TP group.
                     # Each rank generates all outputs — we keep only our share.
@@ -758,12 +756,13 @@ class VLLMGeneration:
                     completion_ids = all_completion_ids[tp_slice]
                     logprobs = all_logprobs[tp_slice] if all_logprobs is not None else None
                     logprob_token_ids = all_logprob_token_ids[tp_slice] if all_logprob_token_ids is not None else None
-                    extra_fields = {k: v[tp_slice] for k, v in extra_fields.items()}
                 else:
                     prompt_ids = all_prompt_ids
                     completion_ids = all_completion_ids
                     logprobs = all_logprobs
                     logprob_token_ids = all_logprob_token_ids
+
+                extra_fields = {}  # No extra fields for colocate mode
 
                 if self.enable_sleep_mode:
                     self.llm.sleep(level=2)
