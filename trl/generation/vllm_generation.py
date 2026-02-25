@@ -43,7 +43,7 @@ if is_vllm_available():
 logger = logging.getLogger(__name__)
 
 
-def extract_logprobs(all_outputs: list[RequestOutput]):
+def extract_logprobs(all_outputs: list["RequestOutput"]):
     """
     Extract logprobs and token IDs from vLLM generation outputs.
 
