@@ -386,7 +386,6 @@ def llm_worker(
             args, kwargs = command.get("args", ()), command.get("kwargs", {})
             method = getattr(llm, method_name)
             result = method(*args, **kwargs)
-
             if command["type"] == "call":
                 connection.send(result)
         elif command["type"] == "shutdown":
