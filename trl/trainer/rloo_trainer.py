@@ -518,6 +518,7 @@ class RLOOTrainer(BaseTrainer):
                 top_k=self.top_k,
                 min_p=self.min_p,
                 max_completion_length=self.max_completion_length,
+                logprobs=None,  # we don't need logprobs from vLLM in RLOO
                 generation_kwargs=args.generation_kwargs,
                 # Chat/tool configuration
                 chat_template_kwargs=self.chat_template_kwargs,
