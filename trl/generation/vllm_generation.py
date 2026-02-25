@@ -43,6 +43,7 @@ if is_vllm_available():
 
 logger = logging.getLogger(__name__)
 
+
 def empty_cache() -> None:
     """Empties the cache of the available torch device.
 
