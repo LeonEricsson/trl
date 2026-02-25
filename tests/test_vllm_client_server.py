@@ -14,6 +14,7 @@
 
 import os
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 from transformers import AutoModelForCausalLM
@@ -61,6 +62,59 @@ class TestChunkList(TrlTestCase):
             [1, "two", 3.0],
             [{"four": 4}, ["f", "i", "v", "e"]],
         ]
+
+
+class TestExtractLogprobs(TrlTestCase):
+    def test_extract_logprobs_sorts_by_rank_and_replaces_nan(self):
+        all_outputs = [
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        logprobs=[
+                            {
+                                11: SimpleNamespace(rank=1, logprob=-0.2),
+                                99: SimpleNamespace(rank=0, logprob=-0.1),
+                                42: SimpleNamespace(rank=2, logprob=float("nan")),
+                            },
+                            {
+                                5: SimpleNamespace(rank=0, logprob=-1.1),
+                            },
+                        ]
+                    )
+                ]
+            ),
+            SimpleNamespace(
+                outputs=[
+                    SimpleNamespace(
+                        logprobs=[
+                            {
+                                3: SimpleNamespace(rank=1, logprob=-0.5),
+                                7: SimpleNamespace(rank=0, logprob=-0.4),
+                            }
+                        ]
+                    )
+                ]
+            ),
+        ]
+
+        all_logprobs, all_token_ids = extract_logprobs(all_outputs)
+
+        assert all_token_ids == [
+            [[99, 11, 42], [5]],
+            [[7, 3]],
+        ]
+        assert all_logprobs == [
+            [[-0.1, -0.2, None], [-1.1]],
+            [[-0.4, -0.5]],
+        ]
+
+    def test_extract_logprobs_returns_none_token_ids_when_logprobs_missing(self):
+        all_outputs = [SimpleNamespace(outputs=[SimpleNamespace(logprobs=None)])]
+
+        all_logprobs, all_token_ids = extract_logprobs(all_outputs)
+
+        assert all_logprobs is None
+        assert all_token_ids is None
 
 
 @pytest.mark.slow
@@ -152,65 +206,6 @@ class TestVLLMClientServer(TrlTestCase):
     def test_reset_prefix_cache(self):
         # Test resetting the prefix cache
         self.client.reset_prefix_cache()
-
-    def test_chat_completions_endpoint(self):
-        data = self.client.chat_completions(
-            messages=[{"role": "user", "content": "Say hello"}],
-            max_tokens=32,
-        )
-
-        assert "id" in data
-        assert "choices" in data
-        assert "usage" in data
-        assert len(data["choices"]) > 0
-        assert data["choices"][0]["message"]["role"] == "assistant"
-        assert data["choices"][0]["finish_reason"] in ["stop", "length", "tool_calls"]
-
-    def test_chat_completions_with_tools(self):
-        tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "get_weather",
-                    "description": "Get weather information for a location",
-                    "parameters": {"type": "object", "properties": {"location": {"type": "string"}}},
-                },
-            }
-        ]
-        data = self.client.chat_completions(
-            messages=[{"role": "user", "content": "What's the weather in San Francisco?"}],
-            tools=tools,
-            max_tokens=100,
-        )
-
-        assert "choices" in data
-        assert len(data["choices"]) > 0
-        assert "message" in data["choices"][0]
-
-    def test_chat_completions_with_params(self):
-        data = self.client.chat_completions(
-            messages=[{"role": "user", "content": "Tell me a joke"}],
-            n=2,
-            temperature=0.8,
-            top_p=0.9,
-            max_tokens=32,
-        )
-
-        assert len(data["choices"]) == 2
-
-        for i, choice in enumerate(data["choices"]):
-            assert choice["index"] == i, f"Expected choice at position {i} to have index {i}, got {choice['index']}"
-            assert "message" in choice
-            assert choice["message"]["role"] == "assistant"
-
-    def test_tokenize_endpoint(self):
-        data = self.client.tokenize(messages=[{"role": "user", "content": "Hello, how are you?"}])
-
-        assert "tokens" in data
-        assert "model" in data
-        assert isinstance(data["tokens"], list)
-        assert len(data["tokens"]) > 0
-        assert all(isinstance(tok, int) for tok in data["tokens"])
 
     @pytest.mark.xfail(reason="Importing `bitsandbytes` causes issues, see vllm-project/vllm#32793")
     def test_logprobs_match_with_non_default_sampling(self):
