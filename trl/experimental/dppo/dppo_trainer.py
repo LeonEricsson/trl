@@ -216,7 +216,7 @@ class DPPOTrainer(GRPOTrainer):
             peft_config=peft_config,
         )
 
-        if self.divergence_type.startswith("topk_") and self.use_vllm:
+        if self.divergence_type in ["topk_tv", "topk_kl"] and self.use_vllm:
             self.vllm_generation.logprobs = self.divergence_topk
 
     def _generate_single_turn(self, prompts: list):
