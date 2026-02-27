@@ -228,7 +228,7 @@ class DPPOTrainer(GRPOTrainer):
         """
         device = self.accelerator.device
         mode = "train" if self.model.training else "eval"
-        needs_topk = self.divergence_type.startswith("topk_")
+        needs_topk = self.divergence_type in ["topk_tv", "topk_kl"]
         K = self.divergence_topk
 
         if self.use_vllm:
