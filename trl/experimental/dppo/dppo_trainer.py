@@ -172,18 +172,13 @@ class DPPOTrainer(GRPOTrainer):
         "title": "Rethinking the Trust Region in LLM Reinforcement Learning",
         "id": "2602.04879",
         # docstyle-ignore
-        "citation": textwrap.dedent(
-            """\
-            @misc{zhang2025rethinkingtrust,
+        "citation": textwrap.dedent("""\
+            @article{qi2026rethinking,
                 title        = {{Rethinking the Trust Region in LLM Reinforcement Learning}},
-                author       = {Yan Zhang and others},
-                year         = 2025,
-                url          = {https://arxiv.org/abs/2602.04879},
-                archivePrefix= {arXiv},
-                eprint       = {2602.04879},
-                primaryClass = {cs.LG}
-            }"""
-        ),
+                author       = {Qi, Penghui and Zhou, Xiangxin and Liu, Zichen and Pang, Tianyu and Du, Chao and Lin, Min and Lee, Wee Sun},
+                journal      = {arXiv preprint arXiv:2602.04879},
+                year         = {2026}
+            }"""),
     }
 
     def __init__(
